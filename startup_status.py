@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 
-from waveshare_epd import epd5in79
+from waveshare_epd_py import epd5in79
 
 def get_ip_address():
     try:

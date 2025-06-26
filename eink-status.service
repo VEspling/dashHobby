@@ -1,0 +1,15 @@
+[Unit]
+Description=E-Ink Startup Status Display
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/dietpi/repos/hobby/startup_status.py
+WorkingDirectory=/home/dietpi/repos/hobby
+StandardOutput=journal
+StandardError=journal
+Restart=always
+User=dietpi
+Group=dietpi
+
+[Install]
+WantedBy=multi-user.target

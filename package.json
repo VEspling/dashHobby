@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@abandonware/noble": "^1.9.2-26"
+    "@abandonware/noble": "^1.9.2-26",
+    "better-sqlite3": "^12.2.0"
   }
 }

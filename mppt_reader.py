@@ -1,41 +1,24 @@
-# mppt_reader.py
-import asyncio
-import json
-import time
+import asyncio, json, sqlite3
 from datetime import datetime
 from bleak import BleakScanner
 
-STATUS_FILE = "status.json"
-
-def update_status(mppt_info):
-    try:
-        with open(STATUS_FILE, "r") as f:
-            status = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        status = {}
-
-    status["mppt"] = {
-        "name": mppt_info["name"],
-        "address": mppt_info["address"],
-        "timestamp": datetime.now().isoformat()
-    }
-
-    with open(STATUS_FILE, "w") as f:
-        json.dump(status, f, indent=2)
-    print(f"✅ MPPT info saved: {mppt_info['name']} @ {mppt_info['address']}")
-
 async def read_mppt():
-    print("🔍 Scanning for SmartSolar devices...")
-    devices = await BleakScanner.discover(timeout=5.0)
+    devices = await BleakScanner.discover()
     for d in devices:
-        if d.name and "SmartSolar" in d.name:
-            mppt_info = {
-                "name": d.name,
-                "address": d.address
+        if "SmartSolar" in d.name:
+            data = {
+                "device": d.name,
+                "address": d.address,
+                "timestamp": datetime.utcnow().isoformat()
             }
-            update_status(mppt_info)
-            return
-    print("❌ No SmartSolar MPPT found.")
 
-if __name__ == "__main__":
-    asyncio.run(read_mppt())
+            conn = sqlite3.connect("eink_data.db")
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO mppt_data (data) VALUES (?)", [json.dumps(data)])
+            conn.commit()
+            conn.close()
+
+            print(f"✅ MPPT-data sparad: {data}")
+            return
+
+asyncio.run(read_mppt())

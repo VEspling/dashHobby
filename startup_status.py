@@ -88,7 +88,33 @@ def render_status():
         y += 12
         if y > HEIGHT - 15:
             break  # avoid overflow
+# Hämta senaste BMS
+try:
+    conn = sqlite3.connect("eink_data.db")
+    cur = conn.cursor()
+    cur.execute("SELECT data FROM bms_data ORDER BY timestamp DESC LIMIT 1")
+    row = cur.fetchone()
+    if row:
+        bms = json.loads(row[0])
+        draw.text((10, 100), f"BMS: {bms['cells']}", font=font, fill=0)
+    else:
+        draw.text((10, 100), "BMS: No data", font=font, fill=0)
+except:
+    draw.text((10, 100), "BMS: ERROR", font=font, fill=0)
 
+# Hämta senaste MPPT
+try:
+    cur.execute("SELECT data FROM mppt_data ORDER BY timestamp DESC LIMIT 1")
+    row = cur.fetchone()
+    if row:
+        mppt = json.loads(row[0])
+        draw.text((10, 120), f"MPPT: {mppt['device']}", font=font, fill=0)
+    else:
+        draw.text((10, 120), "MPPT: No data", font=font, fill=0)
+    conn.close()
+except:
+    draw.text((10, 120), "MPPT: ERROR", font=font, fill=0)
+    conn.close()
     epd.display(epd.getbuffer(image))
     time.sleep(5)
     epd.sleep()

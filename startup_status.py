@@ -4,8 +4,16 @@ import json
 import os
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
+import subprocess
 
 from waveshare_epd_py import epd5in79
+
+def get_ssid():
+    try:
+        result = subprocess.run(["iwgetid", "-r"], capture_output=True, text=True)
+        return result.stdout.strip() or "N/A"
+    except Exception:
+        return "N/A"
 
 def get_ip_address():
     try:
@@ -35,14 +43,16 @@ def render_status():
     font = ImageFont.load_default()
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ssid = get_ssid()
     ip = get_ip_address()
     status = load_status()
 
     draw.text((10, 10), f"Time: {now}", font=font, fill=0)
-    draw.text((10, 30), f"IP: {ip}", font=font, fill=0)
-    draw.text((10, 50), f"DB: {status.get('db', '...')}", font=font, fill=0)
-    draw.text((10, 70), f"BMS: {status.get('bms', '...')}", font=font, fill=0)
-    draw.text((10, 90), f"MPPT: {status.get('mppt', '...')}", font=font, fill=0)
+    draw.text((10, 30), f"WiFi: {ssid}", font=font, fill=0)
+    draw.text((10, 50), f"IP: {ip}", font=font, fill=0)
+    draw.text((10, 70), f"DB: {status.get('db', '...')}", font=font, fill=0)
+    draw.text((10, 90), f"BMS: {status.get('bms', '...')}", font=font, fill=0)
+    draw.text((10, 110), f"MPPT: {status.get('mppt', '...')}", font=font, fill=0)
 
     epd.display(epd.getbuffer(image))
     time.sleep(2)

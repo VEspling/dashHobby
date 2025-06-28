@@ -1,11 +1,10 @@
 import os
-import time
-import json
-import socket
 import subprocess
+import socket
+import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
-
+import sqlite3
 from waveshare_epd_py import epd5in79
 
 def get_ip_address():
@@ -18,106 +17,81 @@ def get_ip_address():
     except:
         return "N/A"
 
-def get_wifi_ssid():
+def get_ssid():
     try:
-        ssid = subprocess.check_output(["iwgetid", "-r"]).decode().strip()
-        return ssid if ssid else "N/A"
+        result = subprocess.check_output(["iwgetid", "-r"]).decode().strip()
+        return result if result else "N/A"
     except:
         return "N/A"
 
-def check_database():
-    try:
-        import sqlite3
-        conn = sqlite3.connect("eink_data.db")
-        conn.close()
-        return True
-    except:
-        return False
+def run_external_scripts():
+    os.system("python3 mppt_reader.py &")
+    os.system("node bms_reader_debug.js &")
 
-def read_status_file():
+def load_status():
     try:
+        import json
         with open("status.json", "r") as f:
             return json.load(f)
     except:
         return {}
 
-def render_status():
-    # Init e-paper
-    epd = epd5in79.EPD()
-    epd.init()
-    epd.Clear()
-
+def display_error(epd, message):
     WIDTH, HEIGHT = epd.width, epd.height
     image = Image.new("L", (WIDTH, HEIGHT), 255)
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default()
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ip = get_ip_address()
-    ssid = get_wifi_ssid()
-    db_ok = check_database()
-
-    # Start MPPT and BMS readers
-    subprocess.Popen(["python3", "mppt_reader.py"])
-    subprocess.Popen(["node", "bms_reader_debug.js"])
-
-    # Wait for both to finish writing to status.json
-    time.sleep(4)
-    status = read_status_file()
-
-    # Read MPPT
-    mppt = status.get("mppt", {})
-    mppt_name = mppt.get("name", "Not found")
-    mppt_time = mppt.get("timestamp", "-")
-
-    # Read BMS cell data
-    cells = status.get("bms", {}).get("cells", {})
-
-    draw.text((10, 10), f"{now}", font=font, fill=0)
-    draw.text((10, 25), f"WiFi: {ssid}", font=font, fill=0)
-    draw.text((10, 40), f"IP: {ip}", font=font, fill=0)
-    draw.text((10, 55), f"DB: {'OK' if db_ok else 'ERROR'}", font=font, fill=0)
-
-    draw.text((10, 75), f"MPPT: {mppt_name}", font=font, fill=0)
-    draw.text((10, 90), f"Last: {mppt_time}", font=font, fill=0)
-
-    # List BMS cell voltages
-    y = 110
-    for cell, v in sorted(cells.items()):
-        draw.text((10, y), f"{cell}: {v:.3f}V", font=font, fill=0)
-        y += 12
-        if y > HEIGHT - 15:
-            break  # avoid overflow
-# Hämta senaste BMS
-try:
-    conn = sqlite3.connect("eink_data.db")
-    cur = conn.cursor()
-    cur.execute("SELECT data FROM bms_data ORDER BY timestamp DESC LIMIT 1")
-    row = cur.fetchone()
-    if row:
-        bms = json.loads(row[0])
-        draw.text((10, 100), f"BMS: {bms['cells']}", font=font, fill=0)
-    else:
-        draw.text((10, 100), "BMS: No data", font=font, fill=0)
-except:
-    draw.text((10, 100), "BMS: ERROR", font=font, fill=0)
-
-# Hämta senaste MPPT
-try:
-    cur.execute("SELECT data FROM mppt_data ORDER BY timestamp DESC LIMIT 1")
-    row = cur.fetchone()
-    if row:
-        mppt = json.loads(row[0])
-        draw.text((10, 120), f"MPPT: {mppt['device']}", font=font, fill=0)
-    else:
-        draw.text((10, 120), "MPPT: No data", font=font, fill=0)
-    conn.close()
-except:
-    draw.text((10, 120), "MPPT: ERROR", font=font, fill=0)
-    conn.close()
+    draw.text((10, 10), f"ERROR: {message}", font=font, fill=0)
     epd.display(epd.getbuffer(image))
     time.sleep(5)
     epd.sleep()
 
+def main():
+    try:
+        epd = epd5in79.EPD()
+        epd.init()
+        epd.Clear()
+
+        WIDTH, HEIGHT = epd.width, epd.height
+        image = Image.new("L", (WIDTH, HEIGHT), 255)
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.load_default()
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ip = get_ip_address()
+        ssid = get_ssid()
+
+        draw.text((10, 10), f"Time: {now}", font=font, fill=0)
+        draw.text((10, 30), f"WiFi: {ssid}", font=font, fill=0)
+        draw.text((10, 50), f"IP: {ip}", font=font, fill=0)
+
+        try:
+            conn = sqlite3.connect("eink_data.db")
+            conn.close()
+            draw.text((10, 70), "DB: OK", font=font, fill=0)
+        except:
+            draw.text((10, 70), "DB: ERROR", font=font, fill=0)
+
+        status = load_status()
+        bms_status = status.get("bms", "N/A")
+        mppt_status = status.get("mppt", "N/A")
+
+        draw.text((10, 90), f"BMS: {bms_status}", font=font, fill=0)
+        draw.text((10, 110), f"MPPT: {mppt_status}", font=font, fill=0)
+
+        epd.display(epd.getbuffer(image))
+        time.sleep(5)
+        epd.sleep()
+
+        run_external_scripts()
+
+    except Exception as e:
+        try:
+            epd = epd5in79.EPD()
+            epd.init()
+            display_error(epd, str(e))
+        except:
+            print(f"Startup failed: {e}")
+
 if __name__ == "__main__":
-    render_status()
+    main()
